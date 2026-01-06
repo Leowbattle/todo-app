@@ -1,4 +1,4 @@
-from flask import Flask
+from flask import Flask, request, jsonify
 import psycopg
 import os
 from pathlib import Path
@@ -40,11 +40,60 @@ def get_todos():
     """Fetch all todos from the database."""
     with get_db_connection() as conn:
         with conn.cursor() as cur:
-            cur.execute("SELECT id, title, description, completed, created_at, updated_at FROM todos;")
+            cur.execute("SELECT id, title, description, completed, created_at, updated_at FROM todos ORDER BY updated_at DESC;")
             todos = cur.fetchall()
     return todos
+
+@app.route("/api/todos", methods=["POST"])
+def create_todo_route():
+    data = request.get_json()
+    title = data.get("title")
+    description = data.get("description")
+    
+    with get_db_connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                "INSERT INTO todos (title, description, completed, created_at, updated_at) VALUES (%s, %s, %s, NOW(), NOW()) RETURNING id, title, description, completed, created_at, updated_at;",
+                (title, description, False)
+            )
+            new_todo = cur.fetchone()
+        conn.commit()
+    
+    return jsonify(new_todo), 201
 
 @app.route("/api/todos", methods=["GET"])
 def get_todos_route():
     todos = get_todos()
     return {"todos": todos}
+
+@app.route("/api/todos/<int:todo_id>", methods=["PUT"])
+def update_todo_route(todo_id):
+    data = request.get_json()
+    completed = data.get("completed")
+    
+    with get_db_connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                "UPDATE todos SET completed = %s, updated_at = NOW() WHERE id = %s RETURNING id, title, description, completed, created_at, updated_at;",
+                (completed, todo_id)
+            )
+            updated_todo = cur.fetchone()
+        conn.commit()
+    
+    if updated_todo:
+        return jsonify(updated_todo)
+    else:
+        return jsonify({"error": "Todo not found"}), 404
+    
+@app.route("/api/todos/<int:todo_id>", methods=["DELETE"])
+def delete_todo_route(todo_id):
+    with get_db_connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute("DELETE FROM todos WHERE id = %s RETURNING id;", (todo_id,))
+            deleted_todo = cur.fetchone()
+        conn.commit()
+    
+    if deleted_todo:
+        return jsonify({"message": "Todo deleted"})
+    else:
+        return jsonify({"error": "Todo not found"}), 404
