@@ -2,45 +2,9 @@ import { useState } from 'react'
 import './App.css'
 import { Button, ListGroup, Form } from 'react-bootstrap';
 import { useEffect } from 'react';
+import { createTodo, getTodos, updateTodo, deleteTodo } from './api/todos';
 
-async function createTodo(title, description) {
-  const response = await fetch('/api/todos', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({ title, description }),
-  });
-  const data = await response.json();
-  return data.todo;
-}
-
-// Get a list of all todos from the backend API
-async function getTodos() {
-  const response = await fetch('/api/todos');
-  const data = await response.json();
-  return data.todos;
-}
-
-// Update a todo's completed status
-async function updateTodo(id, completed) {
-  await fetch(`/api/todos/${id}`, {
-    method: 'PUT',
-    headers: {
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({ completed }),
-  });
-}
-
-// Delete a todo by ID
-async function deleteTodo(id) {
-  await fetch(`/api/todos/${id}`, {
-    method: 'DELETE',
-  });
-}
-
-function TODOItem({ todo, setChecked }) {
+function TODOItem({ todo, setChecked, deleteTodo }) {
   return (
     <ListGroup.Item>
       <h2>{todo.title}</h2>
@@ -50,18 +14,33 @@ function TODOItem({ todo, setChecked }) {
       }}>{todo.completed ? "✅" : "❌"}</Button>
       <Button variant="danger" onClick={async () => {
         await deleteTodo(todo.id);
-        window.location.reload();
       }}>Delete</Button>
     </ListGroup.Item>
   )
 }
 
 function App() {
-  const [todos, setTodos] = useState(null);
+  const [todos, setTodos] = useState([]);
+  const [title, setTitle] = useState('');
+  const [description, setDescription] = useState('');
 
   useEffect(() => {
     getTodos().then(data => setTodos(data));
   }, []);
+
+  async function handleCreateTodo() {
+    if (title == '' || description == '') {
+      return;
+    }
+
+    const todo = await createTodo(title, description);
+    setTodos([todo, ...todos]);
+    
+    setTitle('');
+    setDescription('');
+
+    return todo;
+  }
 
   async function setChecked(id, completed) {
     setTodos(todos.map(todo => {
@@ -74,10 +53,8 @@ function App() {
     }));
   }
 
-  async function deleteTodo(id) {
-    await fetch(`/api/todos/${id}`, {
-      method: 'DELETE',
-    });
+  async function handleDeleteTodo(id) {
+    await deleteTodo(id);
     setTodos(todos.filter(todo => todo.id !== id));
   }
 
@@ -87,30 +64,25 @@ function App() {
       <Form>
         <Form.Group className="mb-3" controlId="formTitle">
           <Form.Label>Title</Form.Label>
-          <Form.Control type="text" placeholder="Enter title" id="titleInput" />
+          <Form.Control type="text" placeholder="Enter title" value={title} onChange={(e) => setTitle(e.target.value)} />
         </Form.Group>
 
         <Form.Group className="mb-3" controlId="formDescription">
           <Form.Label>Description</Form.Label>
-          <Form.Control type="text" placeholder="Enter description" id="descriptionInput" />
+          <Form.Control type="text" placeholder="Enter description" value={description} onChange={(e) => setDescription(e.target.value)} />
         </Form.Group>
 
-        <Button variant="primary" onClick={async () => {
-          const title = document.getElementById('titleInput').value;
-          const description = document.getElementById('descriptionInput').value;
-          const newTodo = await createTodo(title, description);
-          window.location.reload();
-        }}>
+        <Button variant="primary" onClick={handleCreateTodo}>
           Add Todo
         </Button>
       </Form>
       <ListGroup>
-        {todos && todos.map(todo => (
-          <TODOItem key={todo.id} todo={todo} setChecked={setChecked} deleteTodo={deleteTodo} />
+        {todos.map(todo => (
+          <TODOItem key={todo.id} todo={todo} setChecked={setChecked} deleteTodo={handleDeleteTodo} />
         ))}
       </ListGroup>
     </>
   )
 }
 
-export default App
+export default App;
