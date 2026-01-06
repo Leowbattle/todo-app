@@ -7,14 +7,24 @@ app = Flask(__name__)
 
 def get_db_connection():
     """Get a database connection."""
-    return psycopg.connect(
-        dbname=os.environ["PG_DBNAME"],
-        user=os.environ["PG_USER"],
-        host=os.environ["PG_HOST"],
-        password=os.environ["PG_PASSWORD"],
-        port=5432,
-        row_factory=psycopg.rows.dict_row
-    )
+    # Use DATABASE_URL if available (Heroku), otherwise use individual env vars
+    database_url = os.environ.get("DATABASE_URL")
+    
+    if database_url:
+        # Heroku uses postgres://, but psycopg3 requires postgresql://
+        if database_url.startswith("postgres://"):
+            database_url = database_url.replace("postgres://", "postgresql://", 1)
+        return psycopg.connect(database_url, row_factory=psycopg.rows.dict_row)
+    else:
+        # Local development
+        return psycopg.connect(
+            dbname=os.environ["PG_DBNAME"],
+            user=os.environ["PG_USER"],
+            host=os.environ["PG_HOST"],
+            password=os.environ["PG_PASSWORD"],
+            port=5432,
+            row_factory=psycopg.rows.dict_row
+        )
 
 def init_db():
     """Initialize database with schema from init.sql."""
