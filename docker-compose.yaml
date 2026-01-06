@@ -1,0 +1,57 @@
+services:
+  db:
+    image: postgres
+    restart: always
+    environment:
+      PGUSER: postgres
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: password
+    volumes:
+      - pgdata:/var/lib/postgresql
+    ports:
+      - 5432:5432
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready"]
+      interval: 1s
+      timeout: 5s
+      retries: 10
+
+  adminer:
+    image: adminer
+    restart: always
+    ports:
+      - 8080:8080
+    
+  frontend:
+    build:
+      context: frontend
+      target: builder
+    volumes:
+      - ./frontend:/code
+      - node_modules:/code/node_modules
+    restart: always
+    ports:
+      - 5173:5173
+  
+  backend:
+    build:
+      context: backend
+      target: builder
+    volumes:
+      - ./backend:/code
+    environment:
+      - FLASK_DEBUG=1
+      - PG_DBNAME=postgres
+      - PG_HOST=db
+      - PG_USER=postgres
+      - PG_PASSWORD=password
+    # restart: always
+    ports:
+      - 8000:8000
+    depends_on:
+      db:
+        condition: service_healthy
+
+volumes:
+  pgdata:
+  node_modules:
