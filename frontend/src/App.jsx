@@ -3,6 +3,8 @@ import './App.css'
 import { Button, ListGroup, Form } from 'react-bootstrap';
 import { useEffect } from 'react';
 import { createTodo, getTodos, updateTodo, deleteTodo } from './api/todos';
+import { GoogleLogin } from '@react-oauth/google';
+import { verifyToken, logout } from './api/auth';
 
 function TODOItem({ todo, setChecked, deleteTodo }) {
   return (
@@ -23,10 +25,50 @@ function App() {
   const [todos, setTodos] = useState([]);
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
+  const [user, setUser] = useState(null);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    getTodos().then(data => setTodos(data));
+    // Check if user was previously logged in
+    const token = localStorage.getItem('authToken');
+    const savedUser = localStorage.getItem('user');
+    
+    if (token && savedUser) {
+      setUser(JSON.parse(savedUser));
+      getTodos().then(data => setTodos(data)).catch(() => {
+        // Token expired, clear storage
+        logout();
+        setUser(null);
+      });
+    }
+    setLoading(false);
   }, []);
+
+  async function handleGoogleLogin(credentialResponse) {
+    try {
+      const response = await verifyToken(credentialResponse.credential);
+      if (response.error) {
+        console.error('Login failed:', response.error);
+        return;
+      }
+      
+      localStorage.setItem('authToken', response.token);
+      localStorage.setItem('user', JSON.stringify(response.user));
+      setUser(response.user);
+      
+      // Load todos after login
+      const todosData = await getTodos();
+      setTodos(todosData);
+    } catch (error) {
+      console.error('Login error:', error);
+    }
+  }
+
+  function handleLogout() {
+    logout();
+    setUser(null);
+    setTodos([]);
+  }
 
   async function handleCreateTodo() {
     if (title == '' || description == '') {
@@ -58,9 +100,31 @@ function App() {
     setTodos(todos.filter(todo => todo.id !== id));
   }
 
+  if (loading) {
+    return <div>Loading...</div>;
+  }
+
+  if (!user) {
+    return (
+      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', marginTop: '50px' }}>
+        <h1>Please sign in to access your todos</h1>
+        <GoogleLogin
+          onSuccess={handleGoogleLogin}
+          onError={() => console.log('Login failed')}
+        />
+      </div>
+    );
+  }
+
   return (
     <>
-      <h1>Todo List</h1>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
+        <h1>Todo List</h1>
+        <div>
+          <Button variant="outline-secondary" onClick={handleLogout}>Logout</Button>
+        </div>
+      </div>
+      
       <Form>
         <Form.Group className="mb-3" controlId="formTitle">
           <Form.Label>Title</Form.Label>
